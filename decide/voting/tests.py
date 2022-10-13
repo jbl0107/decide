@@ -15,6 +15,63 @@ from mixnet.mixcrypt import MixCrypt
 from mixnet.models import Auth
 from voting.models import Voting, Question, QuestionOption
 
+#Para q sea una prueba tiene q heredar de BaseTestCase
+class VotingModelTC(BaseTestCase):
+
+    #genera una pregunta con 2 opciones y una votacion con esa pregunta, y la almacena dentro del modelo d django
+    def setUp(self):
+        q = Question(desc="Descripcion") #creamos y guardamos una pregunta
+        q.save()
+
+        opt1 = QuestionOption(question=q, option="option1") #creamos y guardamos 2 opciones pertenecientes a la pregunta creada
+        opt1.save()
+
+        opt2 = QuestionOption(question=q, option="option2")
+        opt2.save()
+
+        self.v = Voting(name='Votacion', question = q)
+        self.v.save()
+
+        #llamar al setUp d la clase padre (esto hacerlo siempre) para evitar problemas)
+        super().setUp()
+
+
+    def tearDown(self):
+        return super().tearDown()
+        self.v = None #lo q hemos hecho (entiendo q en el setUp) ha sido crear un objeto de tipo votacion en la clase, lo deshacemos asi
+
+    #Este es nuestro metodo, q va a rescatar el objeto del modelo y ver si se guarda (prueba de tipo CRUD) (son pruebas del unitarias)
+    def testExist(self):
+        #podemos rescatar esa votacion con por ej el nombre
+        v = Voting.objects.get(name = 'Votacion')
+        #comprobamos si la votacion q me acabo de traer, de entre todas sus opciones (options.all devuelve un array), la 1ra, es option1 (linea 28)
+        #si cambiamos a option2, debe de fallar, ya q la opcion 1 de todas las opciones de la votacion, segun como
+        #hemos puesto en el setUp, es 'option1', o si no nuestro metodo de guardar una votacion no funciona. Si pongo [2] y de texto 'option2', debe
+        #funcionar correctamente, ya q la 2da opcion (tal y como hemos definido en el setup es 'option2')
+        self.assertEquals(v.question.options.all()[0].option, "option1")
+        '''podemos mejorar esta prueba, por ej, añadiendo:
+            self.assertEquals(v.question.options.all()[1].option, "option2")
+            self.assertEquals(len(v.question.options.all()), 2) -> el nº de opciones de la votacion sea 2
+        '''
+
+    def testCreatingVotingAPI(self):
+        self.login() #conseguimos q se haga la peticion al login
+        #creamos unos datos para poder realizar dsp la peticion con estos (en formato json, ya q es una api)
+        data = {
+            'name':'Example',
+            'desc':'Description',
+            'question':'I wanna',
+            'question_opt':['car', 'house', 'party'] #posibles opciones a la pregunta
+        }
+
+        
+        response = self.client.post('/voting/', data, format='json')
+        self.assertEqual(response.status_code,201) #verificar q esa peticion se realiza bn
+
+        #Aqui verificamos q, la votacion obtenida en v, tiene la misma descripcion q la creada en data
+        v = Voting.objects.get(name = 'Example')
+        self.assertEqual(v.desc,'Description')
+
 
 class VotingTestCase(BaseTestCase):
 
@@ -23,6 +80,18 @@ class VotingTestCase(BaseTestCase):
 
     def tearDown(self):
         super().tearDown()
+
+    
+    #en este test se utiliza el tostring (__str__) de la votacion(voting), de la pregunta y de las opciones, q son 3 de las 4 lineas q no estabamos probando
+    # q se indicaban en el coverage (en la parte de model/voting) (mirar si no el video de la practica 2 q dura 1:43:08) 
+    #si no recuerdo bn, quitar este metodo, generar el coverage, mirar el model/voting y ver lo q no se cubre, poner este test, regenerar el coverage y ver
+    #la diferencia, como ya se cubren 3 de las 4 lineas q no lo estaban
+    def test_Voting_toString(self):
+        v = self.create_voting() #crea votaciones y las almacena
+        self.assertEquals(str(v),"test voting") #llama al tostring y ya dsp verifica
+        self.assertEquals(str(v.question),"test question")  
+        self.assertEquals(str(v.question.options.all()[0]),"option 1 (2)")
+
 
     def encrypt_msg(self, msg, v, bits=settings.KEYBITS):
         pk = v.pub_key
